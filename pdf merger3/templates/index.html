@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Merger</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            PDF Merger
+        </a>
+        <div class="nav-links">
+            <a href="/" class="nav-link">Home</a>
+            <a href="https://github.com/pranitdandewarofficial/pdf-merger" class="nav-link" target="_blank">GitHub</a>
+            <a href="/about" class="nav-link">About</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h1>PDF Merger</h1>
+        <div class="error-message" id="error-message" style="display: none;"></div>
+        <form action="/merge" method="post" enctype="multipart/form-data" id="upload-form">
+            <div class="settings-panel">
+                <label>
+                    <input type="checkbox" name="remove_metadata" id="remove-metadata"> Remove PDF metadata
+                </label>
+                <label>
+                    <input type="checkbox" name="compress_pdf" id="compress-pdf"> Compress PDF
+                </label>
+            </div>
+            <div class="upload-area" id="drop-zone">
+                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p>Drag & Drop your PDF files here<br>or click to browse</p>
+                <input type="file" name="pdfs" id="file-input" multiple accept="application/pdf" class="file-input" required>
+            </div>
+            <div class="file-list" id="file-list">
+                <p class="file-instruction" style="display: none;">Drag files to reorder them</p>
+            </div>
+            <div class="progress">
+                <div class="progress-bar"></div>
+            </div>
+            <button type="submit" class="upload-btn">Merge PDFs</button>
+        </form>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>Created by Pranit</p>
+            <p>© 2025 PDF Merger. All rights reserved.</p>
+            <div class="social-links">
+                <a href="https://github.com/pranitdandewarofficial" target="_blank">GitHub</a>
+                <a href="https://linkedin.com/in/your-profile" target="_blank">LinkedIn</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileList = document.getElementById('file-list');
+        const form = document.getElementById('upload-form');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('hover');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('hover');
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles({ target: { files: files } });
+        }
+
+        function handleFiles(e) {
+            const files = [...e.target.files];
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.style.display = 'none';
+
+            // Validate files
+            const maxFileSize = 50 * 1024 * 1024; // 50MB
+            const invalidFiles = files.filter(file => {
+                if (!file.type.includes('pdf')) {
+                    return true;
+                }
+                if (file.size > maxFileSize) {
+                    return true;
+                }
+                return false;
+            });
+
+            if (invalidFiles.length > 0) {
+                errorMessage.textContent = 'Error: Please only upload PDF files under 50MB each.';
+                errorMessage.style.display = 'block';
+                fileInput.value = '';
+                return;
+            }
+
+            fileList.innerHTML = '<p class="file-instruction">Drag files to reorder them</p>';
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.draggable = true;
+                fileItem.dataset.index = index;
+                fileItem.innerHTML = `
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="file-name">${file.name}</span>
+                    <span class="file-size">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                `;
+                fileList.appendChild(fileItem);
+            });
+            
+            if (files.length > 0) {
+                fileList.querySelector('.file-instruction').style.display = 'block';
+                setupDragAndDrop();
+            }
+        }
+
+        function setupDragAndDrop() {
+            const fileItems = document.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleFileDrop);
+                item.addEventListener('dragend', handleDragEnd);
+            });
+        }
+
+        function handleDragStart(e) {
+            this.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', this.dataset.index);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            const draggingItem = document.querySelector('.dragging');
+            if (draggingItem !== this) {
+                const allItems = [...fileList.querySelectorAll('.file-item')];
+                const currentPos = allItems.indexOf(this);
+                const afterElement = getDragAfterElement(fileList, e.clientY);
+                if (afterElement == null) {
+                    fileList.appendChild(draggingItem);
+                } else {
+                    fileList.insertBefore(draggingItem, afterElement);
+                }
+            }
+        }
+
+        function handleFileDrop(e) {
+            e.preventDefault();
+            const draggedIdx = e.dataTransfer.getData('text/plain');
+            const items = [...fileList.querySelectorAll('.file-item')];
+            const newFiles = new DataTransfer();
+            
+            items.forEach(item => {
+                const fileIndex = parseInt(item.dataset.index);
+                newFiles.items.add(fileInput.files[fileIndex]);
+            });
+            
+            fileInput.files = newFiles.files;
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+        }
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.file-item:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const progressBar = document.querySelector('.progress');
+            const bar = document.querySelector('.progress-bar');
+            const errorMessage = document.getElementById('error-message');
+            
+            progressBar.style.display = 'block';
+            bar.style.width = '0%';
+            
+            const formData = new FormData(form);
+            
+            try {
+                const response = await fetch('/merge', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to merge PDFs');
+                }
+                
+                // Success - trigger download
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = 'merged.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(downloadUrl);
+                a.remove();
+                
+                // Reset progress bar
+                bar.style.width = '100%';
+                setTimeout(() => {
+                    progressBar.style.display = 'none';
+                    bar.style.width = '0%';
+                }, 1000);
+                
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+                progressBar.style.display = 'none';
+            }
+        });
+
+        document.getElementById('about-link').removeEventListener('click', handleAboutClick);
+    </script>
+</body>
+</html>
